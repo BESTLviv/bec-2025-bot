@@ -1,4 +1,6 @@
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from bot.admin import admin_start
@@ -8,6 +10,9 @@ from bot.handlers import cv, registration, start, main_menu, create_team, team, 
 from bot.utils.database import get_database
 
 config = load_config()
+
+if not config.bot_token:
+    raise ValueError("BOT_TOKEN не знайдено! Перевірте ваш .env файл.")
 
 bot = Bot(token=config.bot_token) 
 dp = Dispatcher(storage=MemoryStorage())

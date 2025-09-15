@@ -1,8 +1,5 @@
 from dataclasses import dataclass
-from dotenv import load_dotenv 
 import os
-
-load_dotenv()
 
 @dataclass
 class Config:
@@ -13,6 +10,6 @@ class Config:
 def load_config():
     return Config(
         bot_token=os.getenv("BOT_TOKEN"),
-        admin=os.getenv("ADMIN"),
+        admin=os.getenv("ADMIN_ID"),
         mongo_uri=os.getenv("DBMONGO_URL"),
     )
