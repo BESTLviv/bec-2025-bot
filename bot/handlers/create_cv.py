@@ -12,6 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.lib import colors
 from aiogram.types import BufferedInputFile
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -159,6 +160,18 @@ async def process_confirm_no(message: types.Message, state: FSMContext):
     )
     await state.clear()
     await state.set_state(CVStates.position)
+
+def draw_sidebar(canvas, doc):
+    """Малює прямокутник зліва на всю висоту"""
+    canvas.saveState()
+    width, height = letter  # розмір сторінки
+    sidebar_width = 80      # ширина бокової панелі в пунктах
+
+    # малюємо прямокутник (x=0, y=0, ширина, висота)
+    canvas.setFillColor(colors.HexColor("#F5A020"))  # наприклад темно-сірий
+    canvas.rect(0, 0, sidebar_width, height, stroke=0, fill=1)
+
+    canvas.restoreState()
 
 @router.message(F.text == "Так")
 async def process_confirm_yes(message: types.Message, state: FSMContext):
