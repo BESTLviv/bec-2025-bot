@@ -185,3 +185,7 @@ async def is_user_registered(user_id):
 async def get_all_user_ids() -> list[int]:
     cursor = users_collection.find({}, {"telegram_id": 1})
     return [int(doc["telegram_id"]) async for doc in cursor]
+
+async def is_user_registered(user_id: int) -> bool:
+    user = await users_collection.find_one({"telegram_id": user_id})
+    return user is not None

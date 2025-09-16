@@ -3,7 +3,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardRemove, FSInputFile
 from bot.keyboards.about_event_kb import get_about_event_kb, get_about_categories_kb
-from bot.keyboards.registration import get_reg_kb
+from bot.keyboards.registration import get_reg_kb, main_menu_kb
+from bot.utils.database import is_user_registered
 
 router = Router()
 
@@ -87,25 +88,18 @@ async def handle_task_examples(message: types.Message, state: FSMContext):
 
 @router.message(F.text == "Назад")
 async def handle_back(message: types.Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state == AboutEventStates.categories:
+    isReg = await is_user_registered(message.from_user.id)
+    if isReg:
+        await message.answer(
+            "Повертаємося до головного меню...",
+            parse_mode="HTML",
+            reply_markup=main_menu_kb()
+        )
+        await state.clear()
+    else:
         await message.answer(
             "Повертаємося до загального меню про змагання...",
             parse_mode="HTML",
             reply_markup=get_about_event_kb()
         )
         await state.set_state(AboutEventStates.about_event)
-    elif current_state == AboutEventStates.about_event:
-        await message.answer(
-            "Повертаємося до головного меню...",
-            parse_mode="HTML",
-            reply_markup=get_reg_kb()
-        )
-        await state.clear()
-    else:
-        await message.answer(
-            "Повертаємося до головного меню...",
-            parse_mode="HTML",
-            reply_markup=get_reg_kb()
-        )
-        await state.clear()
