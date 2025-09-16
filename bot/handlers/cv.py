@@ -25,7 +25,7 @@ async def cv_start(message: types.Message):
     else:
         await message.answer_photo(
             photo=FSInputFile("assets/cv.png"),
-            caption="У цьому меню ви зможете відправити CV! Воно може зацікавити роботодавців, що може змінити ваше життя =)",
+            caption="У цьому меню ти зможеш відправити CV! Воно може зацікавити роботодавців і змінити твоє життя🤩",
             parse_mode="HTML",
             reply_markup=get_cv_kb()
         )
@@ -45,9 +45,7 @@ async def cv_send(message: types.Message, state: FSMContext):
         )
         return
     await message.answer(
-        "Будь ласка, надішліть своє CV у форматі PDF. "
-        "Переконайтеся, що файл не містить особистої інформації, "
-        "такої як номер телефону чи адреса електронної пошти.",
+        "Будь ласка, надішли своє CV у форматі PDF.",
         reply_markup=get_back_cv_kb()
     )
 
@@ -89,7 +87,3 @@ async def handle_cv_file(message: types.Message):
     await update_cv_file_path(user_id, file_id)
     await add_cv(user_id=user_id, cv_file_id=file_id)
     await message.answer("✅ CV завантажено! 🎉", reply_markup=get_have_team_kb())
-
-@router.message(F.photo)
-async def reject_photos(message: types.Message):
-    await message.answer("❗ Будь ласка, надішли CV у форматі PDF, а не фото 🙏")

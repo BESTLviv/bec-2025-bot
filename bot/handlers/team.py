@@ -61,12 +61,12 @@ async def test_task_handler(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     if await get_team_category(user_id) == "Innovative Design":
         await message.answer(
-            "Поки тестового нема Innovative Design",
+            "Тестове завдання для категорії 'Innovative Design' наразі недоступне. Слідкуйте за оновленнями.",
             parse_mode="HTML",
         )
     if await get_team_category(user_id) == "Team Design":
         await message.answer(
-            "Поки тестового нема Team Design",
+            "Тестове завдання для категорії 'Team Design' наразі недоступне. Слідкуйте за оновленнями.",
             parse_mode="HTML",
         )
     else:

@@ -20,7 +20,7 @@ async def update_cv_file_path(user_id: int, file_path: str) -> bool:
     return result.matched_count > 0 or result.upserted_id is not None
 
 async def add_cv(user_id: int, cv_file_id: str = None, position: str = None, 
-                 languages: list = None, education: str = None, experience: str = None, 
+                 languages: list = None, education: str = None, birthdate: str = None, speciality: str = None, experience: str = None, 
                  skills: list = None, about: str = None, contacts: dict = None):
     if languages is None:
         languages = []
@@ -34,6 +34,8 @@ async def add_cv(user_id: int, cv_file_id: str = None, position: str = None,
         "position": position,
         "languages": languages,
         "education": education,
+        "birthdate": birthdate,
+        "speciality": speciality,
         "experience": experience,
         "skills": skills,
         "about": about,
