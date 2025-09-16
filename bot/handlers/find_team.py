@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from bot.keyboards.no_team import get_not_team_kb
 from bot.keyboards.team import get_back_kb, get_have_team_kb
-from bot.utils.database import get_team_by_name, add_user_to_team
+from bot.utils.database import get_team_by_name, add_user_to_team, is_full_team
 
 router = Router()
 
@@ -41,6 +41,10 @@ async def process_team_password(message: types.Message, state: FSMContext):
     team = data.get("team")
     if not team or message.text != team["password"]:
         await message.answer("Неправильний пароль. Спробуйте ще раз або натисніть 'Назад'.", reply_markup=get_back_kb())
+        return
+    if not await is_full_team(team["team_id"]):
+        await message.answer("Вибач, але в цій команді вже 4 учасники. Спробуй приєднатися до іншої команди або створи свою.", reply_markup=get_not_team_kb())
+        await state.clear()
         return
     await add_user_to_team(message.from_user.id, team["team_id"])
     await message.answer(f"Вітаю в команді {team['team_name']}!", reply_markup=get_have_team_kb())
