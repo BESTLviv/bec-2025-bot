@@ -3,11 +3,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 def get_not_team_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Створити команду🥇")], 
-            [KeyboardButton(text="Увійти в команду🏅")], 
-            [KeyboardButton(text="Пошук команди🔍")],
-            # [KeyboardButton(text="CV📜")],
-            [KeyboardButton(text="Назад до головного меню🏠")],
+            [KeyboardButton(text="Створити команду🥇"), 
+            KeyboardButton(text="Увійти в команду🏅")], 
+            [KeyboardButton(text="Пошук команди🔍"),
+            KeyboardButton(text="Назад до головного меню🏠")],
         ],
         resize_keyboard=True
     )

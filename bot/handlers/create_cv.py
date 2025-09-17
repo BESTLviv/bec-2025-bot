@@ -3,6 +3,7 @@ from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from bot.keyboards.cv_keyboard import get_back_kb, get_is_correct_kb
+from datetime import datetime
 from bot.keyboards.registration import main_menu_kb
 from bot.handlers.registration import is_correct_text
 from bot.utils.database import get_user
@@ -75,32 +76,29 @@ async def process_position_input(message: types.Message, state: FSMContext):
     )
     await state.set_state(CVStates.birthdate)
     
+
 @router.message(CVStates.birthdate)
 async def process_birthdate_input(message: types.Message, state: FSMContext):
-    birthdate_pattern = r'^(\d{2})\.(\d{2})\.(\d{4})$'
-    match = re.match(birthdate_pattern, message.text.strip())
+    user_input_date = message.text.strip()
     
-    if not match:
-        await message.answer("⚠️ Неправильний формат дати. Введіть дату у форматі ДД.ММ.РРРР (наприклад: 15.03.1995)")
+    try:
+        date_obj = datetime.strptime(user_input_date, '%d.%m.%Y')
+        
+        if not (1990 <= date_obj.year <= 2024):
+            await message.answer("⚠️ Неправильний рік. Рік народження повинен бути в межах від 1990 до 2024.")
+            return
+            
+        if date_obj > datetime.now():
+            await message.answer("⚠️ Дата народження не може бути в майбутньому.")
+            return
+
+    except ValueError:
+        await message.answer("⚠️ Неправильний формат або недійсна дата. Будь ласка, введіть дату у форматі ДД.ММ.РРРР (наприклад, 29.02.2024).")
         return
     
-    day, month, year = map(int, match.groups())
-    
-    if not (1 <= day <= 31):
-        await message.answer("⚠️ Неправильний день. День повинен бути від 01 до 31.")
-        return
-    
-    if not (1 <= month <= 12):
-        await message.answer("⚠️ Неправильний місяць. Місяць повинен бути від 01 до 12.")
-        return
-    
-    if not (1900 <= year <= 2024):
-        await message.answer("⚠️ Неправильний рік. Рік повинен бути від 1900 до 2024.")
-        return
-    
-    await state.update_data(birthdate=message.text)
+    await state.update_data(birthdate=user_input_date)
     await message.answer(
-        "Якими мовами ти володієш. Вкажи рівень володіння. Наприклад: українська — рідна, англійська — B2.",
+        "Якими мовами ти володієш? Вкажи рівень володіння. Наприклад: українська — рідна, англійська — B2.",
         parse_mode="HTML",
         reply_markup=get_back_kb()
     )

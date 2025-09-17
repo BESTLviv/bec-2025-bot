@@ -168,7 +168,7 @@ async def is_full_team(team_id):
     team = await teams_collection.find_one({"team_id": team_id})
     if not team:
         return False
-    return len(team.get("members", [])) <= 4
+    return len(team.get("members", [])) >= 4
 
 #------------------------------------------------------------------------------------------------
 

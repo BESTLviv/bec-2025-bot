@@ -46,6 +46,9 @@ async def process_category(message: types.Message, state: FSMContext):
 
 @router.message(CreateTeam.team_name)
 async def process_team_name(message: types.Message, state: FSMContext):
+    if message.text is None:
+        await message.answer("🚫 Будь ласка, введи текстове повідомлення.")
+        return
     if message.text == "⬅️ Назад":
         # Повертаємося до вибору категорії
         await message.answer("Оберіть категорію:", reply_markup=get_category_kb(with_back=True))
@@ -62,6 +65,9 @@ async def process_team_name(message: types.Message, state: FSMContext):
 
 @router.message(CreateTeam.password)
 async def process_team_password(message: types.Message, state: FSMContext):
+    if message.text is None:
+        await message.answer("🚫 Будь ласка, введи текстове повідомлення.")
+        return
     if message.text == "⬅️ Назад":
         await message.answer("Введи технології, з якими працює команда (через кому):", reply_markup=get_back_kb())
         await state.set_state(CreateTeam.technologies)
@@ -75,6 +81,9 @@ async def process_team_password(message: types.Message, state: FSMContext):
 
 @router.message(CreateTeam.check_password)
 async def process_team_check_password(message: types.Message, state: FSMContext):
+    if message.text is None:
+        await message.answer("🚫 Будь ласка, введи текстове повідомлення.")
+        return
     if message.text == "⬅️ Назад":
         await message.answer("Введи пароль для команди:", reply_markup=get_back_kb())
         await state.set_state(CreateTeam.password)

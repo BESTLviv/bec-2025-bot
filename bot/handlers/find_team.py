@@ -42,7 +42,7 @@ async def process_team_password(message: types.Message, state: FSMContext):
     if not team or message.text != team["password"]:
         await message.answer("Неправильний пароль. Спробуйте ще раз або натисніть 'Назад'.", reply_markup=get_back_kb())
         return
-    if not await is_full_team(team["team_id"]):
+    if await is_full_team(team["team_id"]):
         await message.answer("Вибач, але в цій команді вже 4 учасники. Спробуй приєднатися до іншої команди або створи свою.", reply_markup=get_not_team_kb())
         await state.clear()
         return

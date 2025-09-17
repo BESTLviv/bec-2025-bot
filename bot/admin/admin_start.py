@@ -75,10 +75,8 @@ async def send_spam(message: types.Message, state: FSMContext, bot):
         await bot.send_message(user_id, message.text)
         sent_count += 1
     except TelegramForbiddenError:
-        # Користувач заблокував бота, це нормально
         failed_count += 1
     except Exception as e:
-        # Інші помилки (наприклад, ID не знайдено, помилка API)
         print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
         failed_count += 1
   

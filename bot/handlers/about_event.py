@@ -70,7 +70,6 @@ async def handle_event_categories(message: types.Message, state: FSMContext):
 
 @router.message(F.text == "Співпраця категорій🤝")
 async def handle_categories_collaboration(message: types.Message, state: FSMContext):
-    await state.set_state(AboutEventStates.categories)
     await message.answer(
         "Один з днів змагань – команди Innovative Design аналізують проблему та пропонують ідеї, як її вирішити.\n\nНаступного дня – команди Team Design беруть ці ідеї й втілюють їх у реальні прототипи.\n\nІ можливо, саме ваша ідея або пристрій стане основою для майбутнього стартапу.",
         parse_mode="HTML",
@@ -79,7 +78,6 @@ async def handle_categories_collaboration(message: types.Message, state: FSMCont
 
 @router.message(F.text == "Приклади завдань😉")
 async def handle_task_examples(message: types.Message, state: FSMContext):
-    await state.set_state(AboutEventStates.categories)
     await message.answer(
         "Приклад Team Design: Розробити функціональну модель тральника для пошуку та розмінування морських мін, який може керуватися в ручному та автоматичному режимі.\n\nПриклад Innovative Design: Розробити концепцію дрона, який сканує руйнування будівель для подальшого аналізу та планування відбудови",
         parse_mode="HTML",
@@ -96,10 +94,17 @@ async def handle_back(message: types.Message, state: FSMContext):
             reply_markup=main_menu_kb()
         )
         await state.clear()
-    else:
+    elif await state.get_state() == AboutEventStates.categories.state:
         await message.answer(
             "Повертаємося до загального меню про змагання...",
             parse_mode="HTML",
             reply_markup=get_about_event_kb()
         )
         await state.set_state(AboutEventStates.about_event)
+    else:
+        await message.answer(
+            "Повертаємося до реєстрації...",
+            parse_mode="HTML",
+            reply_markup=get_reg_kb()
+        )
+        await state.clear()

@@ -45,7 +45,7 @@ async def cv_send(message: types.Message, state: FSMContext):
         )
         return
     await message.answer(
-        "Будь ласка, надішли своє CV у форматі PDF.",
+        "Будь ласка, надішли своє CV у форматі PDF, DOCX.",
         reply_markup=get_back_cv_kb()
     )
 
@@ -61,9 +61,11 @@ async def cv_back(message: types.Message, state: FSMContext):
 async def handle_cv_file(message: types.Message):
     file_name = message.document.file_name or ""
     mime_type = (message.document.mime_type or "").lower()
+    allowed_mime_types = ["application/pdf", "application/msword"]
+    allowed_extensions = [".pdf", ".doc", ".docx"]
 
-    if mime_type != "application/pdf" and not file_name.lower().endswith(".pdf"):
-        await message.answer("❗ Упс, дозволений тільки PDF формат. Спробуй ще раз і надішли PDF.")
+    if (mime_type not in allowed_mime_types) and not any(file_name.lower().endswith(ext) for ext in allowed_extensions):
+        await message.answer("❗ Упс, дозволені тільки формати PDF, DOCX. Спробуй ще раз і надішли файл у відповідному форматі.")
         return
 
     max_file_size = 10 * 1024 * 1024  # 10 МБ
@@ -86,4 +88,4 @@ async def handle_cv_file(message: types.Message):
     user_id = message.from_user.id
     await update_cv_file_path(user_id, file_id)
     await add_cv(user_id=user_id, cv_file_id=file_id)
-    await message.answer("✅ CV завантажено! 🎉", reply_markup=get_have_team_kb())
+    await message.answer("✅ CV завантажено! 🎉", reply_markup=main_menu_kb())

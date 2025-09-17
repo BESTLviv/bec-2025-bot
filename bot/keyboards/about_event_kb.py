@@ -3,10 +3,8 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 def get_about_event_kb():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Організатори🫂")], 
-            [KeyboardButton(text="Що таке BEC⚙️")],
-            [KeyboardButton(text="Категорії змагань✨")],
-            [KeyboardButton(text="Дата та місце проведення📅")],
+            [KeyboardButton(text="Організатори🫂"), KeyboardButton(text="Що таке BEC⚙️")],
+            [KeyboardButton(text="Категорії змагань✨"), KeyboardButton(text="Дата та місце проведення📅")],
             [KeyboardButton(text="Назад")],
         ],
         resize_keyboard=True
