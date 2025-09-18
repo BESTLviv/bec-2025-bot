@@ -195,3 +195,7 @@ async def get_all_user_ids() -> list[int]:
 async def is_user_registered(user_id: int) -> bool:
     user = await users_collection.find_one({"telegram_id": user_id})
     return user is not None
+
+async def is_user_have_cv(user_id: int) -> bool:
+    user = await users_collection.find_one({"telegram_id": user_id})
+    return user is not None and (user.get("cv_file_path") is not None and user.get("cv_file_path") != "null")

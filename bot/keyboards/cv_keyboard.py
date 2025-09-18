@@ -5,6 +5,7 @@ def get_cv_kb():
         keyboard=[
             [KeyboardButton(text="Створити CV")], 
             [KeyboardButton(text="📤 Надіслати готове CV")],
+            [KeyboardButton(text="Перевірити своє CV")],
             [KeyboardButton(text="Назад до меню🔙")],
         ],
         resize_keyboard=True

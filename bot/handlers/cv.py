@@ -6,10 +6,11 @@ from bot.handlers.registration import is_correct_text
 from bot.keyboards.registration import main_menu_kb
 from bot.utils.cv_db import update_cv_file_path, add_cv
 from bot.keyboards.team import get_have_team_kb
-from bot.utils.database import is_user_in_team, users_collection
+from bot.utils.database import is_user_have_cv, is_user_in_team, users_collection
 from aiogram.types import FSInputFile
 
 router = Router()
+
 
 @router.message(F.text == "CV📜")
 async def cv_start(message: types.Message):
@@ -89,3 +90,30 @@ async def handle_cv_file(message: types.Message):
     await update_cv_file_path(user_id, file_id)
     await add_cv(user_id=user_id, cv_file_id=file_id)
     await message.answer("✅ CV завантажено! 🎉", reply_markup=main_menu_kb())
+
+
+@router.message(F.text == "Перевірити своє CV")
+async def cv_check(message: types.Message):
+    user_id = message.from_user.id
+    user_data = await users_collection.find_one({"telegram_id": user_id})
+
+    if user_data and user_data["cv_file_path"] not in [None, "null"]:
+        
+        await message.answer("Знайшов твої CV, зараз надішлю...")
+
+        cv_file_id = user_data.get("cv_file_path")
+
+        if cv_file_id:
+            await message.answer_document(
+            document=cv_file_id,
+            caption="Ось твоє CV. Якщо хочеш надіслати нове, обери '📤 Надіслати готове CV'.",
+            reply_markup=get_cv_kb()
+            )
+        else:
+            print(f"Warning: CV entry for user {user_id} is missing file_id.")
+
+    else:
+        await message.answer(
+            "Упс, здається, ти ще не надіслав жодного CV. Будь ласка, надішли його у форматі PDF або DOCX.",
+            reply_markup=get_cv_kb()
+        )
