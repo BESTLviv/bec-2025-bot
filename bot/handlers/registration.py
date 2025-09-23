@@ -27,6 +27,14 @@ def is_correct_text(text):
         return False
     return bool(re.search(r'[a-zA-Zа-яА-ЯіІїЇєЄґҐ]', text)) and not re.fullmatch(r'[\W_]+', text)
 
+def is_correct_speciality(text):
+    text = text.strip()
+    if not text:
+        return False
+    if len(text) > 85:
+        return False
+    return bool(re.search(r'[a-zA-Zа-яА-ЯіІїЇєЄґҐ]', text)) and not re.fullmatch(r'[\W_]+', text)
+
 def is_valid_age(text):
     return text.isdigit() and 16 <= int(text) <= 79
 
@@ -165,7 +173,7 @@ async def ask_where(message: types.Message, state: FSMContext):
     if message.text is None:
         await message.answer("🚫 Будь ласка, введи текстове повідомлення.")
         return
-    if not is_correct_text(message.text):
+    if not is_correct_speciality(message.text):
         await message.answer("⚠️ Схоже, що дані введені неправильно. Спробуй ще раз. Використовуй лише літери.")
         return
 
