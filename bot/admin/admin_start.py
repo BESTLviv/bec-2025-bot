@@ -1,9 +1,12 @@
+from email.mime import message
 import os
 from aiogram import Router, types, F
 from bot.admin.admin_keyboard import get_admin_kb
 from dotenv import load_dotenv
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+import re
+import html
 from aiogram.exceptions import TelegramForbiddenError
 from bot.utils.database import get_all_user_ids, get_all_users_with_cv
 
@@ -57,37 +60,63 @@ async def get_all_cvs(message: types.Message):
 
 @router.message(SpamStates.waiting_for_message)
 async def send_spam(message: types.Message, state: FSMContext, bot):
-  admin_id = int(os.getenv("ADMIN_ID"))
-  if message.from_user.id != admin_id:
-    return
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
 
-  if message.text.lower() == "назад":
-    await message.answer("Розсилку скасовано.", reply_markup=get_admin_kb())
+    if message.text.lower() == "назад":
+        await message.answer("Розсилку скасовано.", reply_markup=get_admin_kb())
+        await state.clear()
+        return
+
+    raw_text = message.text or ""
+
+    # Шукаємо посилання в тексті
+    url_regex = re.compile(r'https?://t\.me/[^\s)]+')
+    matches = list(url_regex.finditer(raw_text))
+
+    if matches:
+        first_match = matches[0]
+        url = first_match.group(0)
+
+        # Текст до посилання
+        before_text = html.escape(raw_text[:first_match.start()])
+        # Текст після посилання
+        after_text = html.escape(raw_text[first_match.end():])
+
+        # Створюємо фінальний текст з HTML-посиланням
+        formatted_text = f'{before_text}<a href="{url}">Приєднатися</a>{after_text}'
+    else:
+        # Якщо посилань немає, просто екрануємо весь текст
+        formatted_text = html.escape(raw_text)
+
+    user_ids = await get_all_user_ids()
+    sent_count = 0
+    failed_count = 0
+
+    for user_id in user_ids:
+        try:
+            await bot.send_message(
+                user_id,
+                formatted_text,
+                parse_mode="HTML",
+                # Важливо: не вимикайте прев'ю, якщо хочете бачити опис посилання
+                disable_web_page_preview=False
+            )
+            sent_count += 1
+        except TelegramForbiddenError:
+            failed_count += 1
+        except Exception as e:
+            print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
+            failed_count += 1
+
+    await message.answer(
+        f"Розсилку завершено.\n\n✅ Надіслано: {sent_count}\n❌ Не вдалося надіслати: {failed_count}",
+        reply_markup=get_admin_kb()
+    )
     await state.clear()
-    return
 
-  user_ids = await get_all_user_ids() 
-  sent_count = 0
-  failed_count = 0
-
-  for user_id in user_ids:
-    try:
-        await bot.send_message(user_id, message.text)
-        sent_count += 1
-    except TelegramForbiddenError:
-        failed_count += 1
-    except Exception as e:
-        print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
-        failed_count += 1
-  
-  # Надаємо адміну більш детальну інформацію
-  await message.answer(
-      f"Розсилку завершено.\n\n✅ Надіслано: {sent_count}\n❌ Не вдалося надіслати: {failed_count}",
-      reply_markup=get_admin_kb()
-  )
-  await state.clear()
-
-
+    
 @router.message(F.text == "Статистика")
 async def admin_back(message: types.Message):
     admin_id = int(os.getenv("ADMIN_ID"))
