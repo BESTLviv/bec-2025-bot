@@ -141,6 +141,9 @@ async def get_all_users_with_cv():
 async def count_all_users():
     return await users_collection.count_documents({})
 
+async def get_all_teams():
+    return teams_collection.find({})
+
 #------------------------------------------------------------------------------------------------
 
 async def get_team_by_name(team_name):

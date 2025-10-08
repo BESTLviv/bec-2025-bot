@@ -1,14 +1,14 @@
 from email.mime import message
 import os
 from aiogram import Router, types, F
-from bot.admin.admin_keyboard import get_admin_kb
+from bot.admin.admin_keyboard import get_admin_kb, get_statistic_kb
 from dotenv import load_dotenv
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import re
 import html
 from aiogram.exceptions import TelegramForbiddenError
-from bot.utils.database import get_all_user_ids, get_all_users_with_cv
+from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv
 
 load_dotenv()
 router = Router()
@@ -116,13 +116,45 @@ async def send_spam(message: types.Message, state: FSMContext, bot):
     )
     await state.clear()
 
-    
 @router.message(F.text == "Статистика")
-async def admin_back(message: types.Message):
+async def get_statistics(message: types.Message):
     admin_id = int(os.getenv("ADMIN_ID"))
-    if message.from_user.id == admin_id:
-        await message.answer(
-            "Ви повернулись назад до меню",  
-            reply_markup=get_admin_kb()
-        )
-    return
+    if message.from_user.id != admin_id:
+        return
+
+    await message.answer(
+        "Оберіть дію:",
+        reply_markup=get_statistic_kb()
+    )
+
+@router.message(F.text == "Отримати всі команди")
+async def show_all_teams(message: types.Message): # <--- Нова назва
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    # 3. Викликаємо правильну функцію
+    teams_cursor = await get_all_teams()
+    if not teams_cursor:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+
+    team_list = await teams_cursor.to_list(length=None)
+    if not team_list:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+
+    response = "<b>Список всіх команд:</b>\n\n"
+    for team in team_list:
+        team_name = team.get("team_name", "Невідомо")
+        team_id = team.get("team_id", "Невідомо")
+        members = team.get("members", [])
+        
+        # Додаємо html.escape для безпечного відображення
+        response += f"Команда: <b>{html.escape(str(team_name))}</b>\n"
+        response += f"ID Команди: <b>{html.escape(str(team_id))}</b>\n"
+        response += f"Кількість учасників: <b>{len(members)}</b>\n"
+        response += "-----------------------\n"
+    
+    # Потрібно надіслати `response` користувачу
+    await message.answer(response, parse_mode="HTML")
