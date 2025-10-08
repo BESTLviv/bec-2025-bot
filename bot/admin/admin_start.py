@@ -1,7 +1,7 @@
 from email.mime import message
 import os
 from aiogram import Router, types, F
-from bot.admin.admin_keyboard import get_admin_kb, get_statistic_kb
+from bot.admin.admin_keyboard import get_admin_kb
 from dotenv import load_dotenv
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -116,16 +116,16 @@ async def send_spam(message: types.Message, state: FSMContext, bot):
     )
     await state.clear()
 
-@router.message(F.text == "Статистика")
-async def get_statistics(message: types.Message):
-    admin_id = int(os.getenv("ADMIN_ID"))
-    if message.from_user.id != admin_id:
-        return
+# @router.message(F.text == "Статистика")
+# async def get_statistics(message: types.Message):
+#     admin_id = int(os.getenv("ADMIN_ID"))
+#     if message.from_user.id != admin_id:
+#         return
 
-    await message.answer(
-        "Оберіть дію:",
-        reply_markup=get_statistic_kb()
-    )
+#     await message.answer(
+#         "Оберіть дію:",
+#         reply_markup=get_statistic_kb()
+#     )
 
 @router.message(F.text == "Отримати всі команди")
 async def show_all_teams(message: types.Message): # <--- Нова назва
