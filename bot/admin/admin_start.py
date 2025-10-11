@@ -115,17 +115,37 @@ async def send_spam(message: types.Message, state: FSMContext, bot):
         reply_markup=get_admin_kb()
     )
     await state.clear()
+    @router.message(F.text == "Статистика")
+    async def get_statistics(message: types.Message):
+        admin_id = int(os.getenv("ADMIN_ID"))
+        if message.from_user.id != admin_id:
+            return
 
-# @router.message(F.text == "Статистика")
-# async def get_statistics(message: types.Message):
-#     admin_id = int(os.getenv("ADMIN_ID"))
-#     if message.from_user.id != admin_id:
-#         return
+        # Отримуємо всі команди
+        teams_cursor = await get_all_teams()
+        if not teams_cursor:
+            await message.answer("Немає зареєстрованих команд.")
+            return
 
-#     await message.answer(
-#         "Оберіть дію:",
-#         reply_markup=get_statistic_kb()
-#     )
+        team_list = await teams_cursor.to_list(length=None)
+        if not team_list:
+            await message.answer("Немає зареєстрованих команд.")
+            return
+
+        response = "<b>Список всіх команд:</b>\n\n"
+        for team in team_list:
+            team_name = team.get("team_name", "Невідомо")
+            team_category = team.get("category", "Невідомо")
+            members = team.get("members", [])
+            
+            # Додаємо html.escape для безпечного відображення
+            response += f"Команда: <b>{html.escape(str(team_name))}</b>\n"
+            response += f"Категорія: <b>{html.escape(str(team_category))}</b>\n"
+            response += f"Кількість учасників: <b>{len(members)}</b>\n"
+            response += "-----------------------\n"
+        
+        # Надсилаємо список команд
+        await message.answer(response, parse_mode="HTML")
 
 @router.message(F.text == "Отримати всі команди")
 async def show_all_teams(message: types.Message): # <--- Нова назва
