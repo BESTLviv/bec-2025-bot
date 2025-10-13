@@ -202,3 +202,15 @@ async def is_user_registered(user_id: int) -> bool:
 async def is_user_have_cv(user_id: int) -> bool:
     user = await users_collection.find_one({"telegram_id": user_id})
     return user is not None and (user.get("cv_file_path") is not None and user.get("cv_file_path") != "null")
+
+async def get_no_team_user_ids():
+    """
+    Повертає список ID всіх користувачів, у яких поле team_name дорівнює "-".
+    """
+    # Створюємо курсор для пошуку документів
+    cursor = users_collection.find(
+        {"team": "-"}, 
+        {"telegram_id": 1}
+    )
+    user_ids = [int(user['telegram_id']) async for user in cursor]
+    return user_ids
