@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 import asyncio
 
 # Переконайтесь, що всі імпорти правильні та відповідають вашому проєкту
-from bot.admin.admin_keyboard import get_admin_kb
-from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_no_team_user_ids
+from bot.admin.admin_keyboard import get_admin_kb, get_statistic_kb
+from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_all_td_teams, get_all_id_teams, users_collection
 
 load_dotenv()
 router = Router()
@@ -76,6 +76,11 @@ async def send_spam(message: types.Message, state: FSMContext, bot: Bot):
         user_ids = await get_all_user_ids()
         audience_name = "всім користувачам"
     elif audience == "no_team":
+        # Define the function to fetch user IDs without a team
+        async def get_no_team_user_ids():
+            users_cursor = await users_collection.find({"team_id": None}).to_list(length=None)
+            return [user["telegram_id"] for user in users_cursor if "telegram_id" in user]
+
         user_ids = await get_no_team_user_ids()
         audience_name = "користувачам без команди"
     else:
@@ -124,7 +129,6 @@ async def cancel_spam(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text("Розсилку скасовано.")
     await callback.message.answer("Головне меню:", reply_markup=get_admin_kb())
 
-
 # --- ІНШІ ФУНКЦІЇ АДМІНА ---
 
 @router.message(F.text == "Отримати всі CV")
@@ -157,8 +161,51 @@ async def get_all_cvs(message: types.Message):
                 print(f"Помилка відправки CV від {username}: {e}")
     await message.answer("✅ Всі наявні CV надіслано.")
 
+@router.message(F.text == "Статистика")
+async def get_statistics(message: types.Message):
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    await message.answer(
+        "Оберіть дію:",
+        reply_markup=get_statistic_kb()
+    )
+
 @router.message(F.text == "Отримати всі команди")
 async def show_all_teams(message: types.Message):
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    # 3. Викликаємо правильну функцію
+    teams_cursor = await get_all_teams()
+    if not teams_cursor:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+
+    team_list = await teams_cursor.to_list(length=None)
+    if not team_list:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+
+    response = "<b>Список всіх команд:</b>\n\n"
+    for team in team_list:
+        team_name = team.get("team_name", "Невідомо")
+        team_id = team.get("team_id", "Невідомо")
+        members = team.get("members", [])
+        
+        # Додаємо html.escape для безпечного відображення
+        response += f"Команда: <b>{html.escape(str(team_name))}</b>\n"
+        response += f"ID Команди: <b>{html.escape(str(team_id))}</b>\n"
+        response += f"Кількість учасників: <b>{len(members)}</b>\n"
+        response += "-----------------------\n"
+    
+    # Потрібно надіслати `response` користувачу
+    await message.answer(response, parse_mode="HTML")
+
+@router.message(F.text == "Отримати всі не повні команди")
+async def show_all_incomplete_teams(message: types.Message): 
     admin_id = int(os.getenv("ADMIN_ID"))
     if message.from_user.id != admin_id:
         return
@@ -170,15 +217,89 @@ async def show_all_teams(message: types.Message):
         await message.answer("Немає зареєстрованих команд.")
         return
 
-    response = "<b>Список всіх команд:</b>\n\n"
-    for team in team_list:
+    incomplete_teams = [team for team in team_list if len(team.get("members", [])) < 4]
+
+    if not incomplete_teams:
+        await message.answer("Всі команди повні.")
+        return
+
+    response = "<b>Список неповних команд:</b>\n\n"
+    for team in incomplete_teams:
         team_name = team.get("team_name", "Невідомо")
         team_id = team.get("team_id", "Невідомо")
-        members = team.get("members", [])
+        cat = team.get("category", "Невідомо")
+        member_ids = team.get("members", []) # Це список ObjectId
         
         response += f"Команда: <b>{html.escape(str(team_name))}</b>\n"
         response += f"ID Команди: <code>{html.escape(str(team_id))}</code>\n"
-        response += f"Кількість учасників: <b>{len(members)}</b>\n"
+        response += f"Категорія: <code>{html.escape(str(cat))}</code>\n"
+        response += f"Кількість учасників: <b>{len(member_ids)}</b>/{4}\n"
+        
+        if member_ids:
+            response += "Учасники:\n"
+            
+            # --- ОСНОВНА ЗМІНА ТУТ ---
+            # Робимо один запит до БД, щоб отримати всі документи користувачів,
+            # чиї ID знаходяться в списку member_ids.
+            member_docs = await users_collection.find(
+                {"_id": {"$in": member_ids}}
+            ).to_list(length=None)
+            # --- КІНЕЦЬ ЗМІНИ ---
+
+            # Тепер ітеруємо по отриманих документах-словниках
+            for member_doc in member_docs:
+                # Цей рядок тепер працюватиме, бо member_doc - це словник
+                username = member_doc.get("username", "Невідомо")
+                response += f" - @{html.escape(str(username))}\n"
+        
         response += "-----------------------\n"
     
+    await message.answer(response, parse_mode="HTML")
+
+
+@router.message(F.text == "Отримати всі ID")
+async def get_all_ids(message: types.Message): 
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    teams_cursor = await get_all_id_teams()
+    team_list = await teams_cursor.to_list(length=None)
+
+    if not team_list:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+    team_len = len(team_list)
+    response = f"<b>Список всіх ID команд:</b>\nКількість: {team_len}\n"
+    for team in team_list:
+        team_id = team.get("team_id", "Невідомо")
+        member_ids = team.get("members", []) # Це список ObjectId
+        response += f"Команда: <b>{html.escape(str(team['team_name']))}</b>\n"
+        response += f"ID Команди: <code>{html.escape(str(team_id))}</code>\n"
+        response += f"Кількість учасників: <b>{len(member_ids)}</b>/{4}\n"
+
+    await message.answer(response, parse_mode="HTML")
+
+
+@router.message(F.text == "Отримати всі TD")
+async def get_all_td(message: types.Message): 
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    teams_cursor = await get_all_td_teams()
+    team_list = await teams_cursor.to_list(length=None)
+
+    if not team_list:
+        await message.answer("Немає зареєстрованих команд.")
+        return
+    team_len = len(team_list)
+    response = f"<b>Список всіх TD команд:</b>\nКількість: {team_len}\n"
+    for team in team_list:
+        team_id = team.get("team_id", "Невідомо")
+        member_ids = team.get("members", []) # Це список ObjectId
+        response += f"Команда: <b>{html.escape(str(team['team_name']))}</b>\n"
+        response += f"ID Команди: <code>{html.escape(str(team_id))}</code>\n"
+        response += f"Кількість учасників: <b>{len(member_ids)}</b>/{4}\n"
+
     await message.answer(response, parse_mode="HTML")

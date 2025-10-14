@@ -144,6 +144,12 @@ async def count_all_users():
 async def get_all_teams():
     return teams_collection.find({})
 
+async def get_all_td_teams():
+    return teams_collection.find({"category": "Team Design"})
+
+async def get_all_id_teams():
+    return teams_collection.find({"category": "Innovative Design"})
+
 #------------------------------------------------------------------------------------------------
 
 async def get_team_by_name(team_name):

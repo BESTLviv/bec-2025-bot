@@ -9,3 +9,14 @@ def get_admin_kb():
         ],
         resize_keyboard=True
     )
+
+def get_statistic_kb():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="Отримати всі команди")],
+            [KeyboardButton(text="Отримати всі не повні команди")],
+            [KeyboardButton(text="Отримати всі ID")],
+            [KeyboardButton(text="Отримати всі TD")],
+        ],
+        resize_keyboard=True
+    )
