@@ -1,6 +1,7 @@
 from aiogram import Router, types, F
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.types import FSInputFile
 from bot.keyboards.team import get_have_team_kb
 from bot.utils.database import get_team, exit_team, get_team_category
 from bot.keyboards.no_team import get_not_team_kb
@@ -90,14 +91,18 @@ async def test_task_handler(message: types.Message, state: FSMContext):
     try:
         category = await get_team_category(user_id)
         if category == "Innovative Design":
-            await message.answer(
-                "Тестове завдання для категорії 'Innovative Design' наразі недоступне. Слідкуйте за оновленнями.",
-                parse_mode="HTML",
+            fileid = FSInputFile("assets/Test Assigment ID.pdf")
+            await message.answer_document(
+                fileid,
+                caption="Тестове завдання для категорії 'Innovative Design'.",
             )
+            #  instruction_file = FSInputFile("Інстукція Капітан.pdf")
+        # await callback.message.answer_document(instruction_file, caption="✏️ Цей файл допоможе розібратись з функціоналом бота")
         elif category == "Team Design":
-            await message.answer(
-                "Тестове завдання для категорії 'Team Design' наразі недоступне. Слідкуйте за оновленнями.",
-                parse_mode="HTML",
+            fileid = FSInputFile("assets/Test Assigment TD.pdf")
+            await message.answer_document(
+                fileid,
+                caption="Тестове завдання для категорії 'Team Design'.",
             )
     except Exception:
         await message.answer(

@@ -49,13 +49,18 @@ async def start_registration(message: types.Message, state: FSMContext):
     photo_path = "assets/register.png"
     photo_to_send = FSInputFile(photo_path)
 
-    await message.answer_photo(
-        photo=photo_to_send, 
-        caption="Нумо знайомитись! Напиши своє ім'я та прізвище у форматі: Богдан Ковальчук",
+    await message.answer(
+        "На жаль, реєстрацію на BEST Engineering Competition 2025 закінчено…",
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=get_reg_kb()
     )
-    await state.set_state(Registration.name)
+    # await message.answer_photo(
+    #     photo=photo_to_send, 
+    #     caption="Нумо знайомитись! Напиши своє ім'я та прізвище у форматі: Богдан Ковальчук",
+    #     parse_mode="HTML",
+    #     reply_markup=ReplyKeyboardRemove()
+    # )
+    # await state.set_state(Registration.name)
 
 @router.message(Registration.name)
 async def process_name(message: types.Message, state: FSMContext):
