@@ -6,6 +6,8 @@ def get_admin_kb():
             [KeyboardButton(text="Розсилка")],
             [KeyboardButton(text="Статистика")],
             [KeyboardButton(text="Отримати всі CV")],
+            [KeyboardButton(text="Розсилка по TD")],
+            [KeyboardButton(text="Розсилка по ID")],
         ],
         resize_keyboard=True
     )

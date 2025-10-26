@@ -11,7 +11,7 @@ import asyncio
 
 # Переконайтесь, що всі імпорти правильні та відповідають вашому проєкту
 from bot.admin.admin_keyboard import get_admin_kb, get_statistic_kb
-from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_all_td_teams, get_all_id_teams, users_collection
+from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_all_td_teams, get_all_id_teams, users_collection, get_user_ids_by_category
 
 load_dotenv()
 router = Router()
@@ -20,6 +20,10 @@ router = Router()
 class SpamStates(StatesGroup):
   choosing_audience = State()
   waiting_for_message = State()
+
+class CategorySpamStates(StatesGroup):
+    waiting_for_pdf = State()
+    waiting_for_caption = State()
 
 # --- ОБРОБНИК ГОЛОВНОГО МЕНЮ АДМІНА ---
 @router.message(F.text == os.getenv("ADMIN_START"))
@@ -303,3 +307,93 @@ async def get_all_td(message: types.Message):
         response += f"Кількість учасників: <b>{len(member_ids)}</b>/{4}\n"
 
     await message.answer(response, parse_mode="HTML")
+
+# 1. СТАРТ РОЗСИЛКИ ДЛЯ TEAM DESIGN
+@router.message(F.text == "Розсилка по TD")
+async def start_td_spam(message: types.Message, state: FSMContext):
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+    
+    await state.set_state(CategorySpamStates.waiting_for_pdf)
+    await state.update_data(category="Team Design")
+    await message.answer(
+        "Ви обрали розсилку для команд 'Team Design'.\n"
+        "Будь ласка, надішліть PDF-файл.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+# 2. СТАРТ РОЗСИЛКИ ДЛЯ INNOVATIVE DESIGN
+@router.message(F.text == "Розсилка по ID")
+async def start_id_spam(message: types.Message, state: FSMContext):
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+    
+    await state.set_state(CategorySpamStates.waiting_for_pdf)
+    await state.update_data(category="Innovative Design")
+    await message.answer(
+        "Ви обрали розсилку для команд 'Innovative Design'.\n"
+        "Будь ласка, надішліть PDF-файл.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+# 3. ОБРОБКА ОТРИМАНОГО PDF-ФАЙЛУ
+@router.message(CategorySpamStates.waiting_for_pdf, F.document)
+async def process_spam_pdf(message: types.Message, state: FSMContext):
+
+    pdf_file_id = message.document.file_id
+    await state.update_data(pdf_file_id=pdf_file_id)
+    await state.set_state(CategorySpamStates.waiting_for_caption)
+    await message.answer("✅ Файл отримано. Тепер надішліть текст (опис) до файлу.")
+
+@router.message(CategorySpamStates.waiting_for_pdf)
+async def wrong_pdf_input(message: types.Message):
+    await message.answer("Помилка. Будь ласка, надішліть саме PDF-файл.")
+
+# 4. ОБРОБКА ТЕКСТУ ТА ФІНАЛЬНА ВІДПРАВКА
+@router.message(CategorySpamStates.waiting_for_caption)
+async def process_caption_and_send(message: types.Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    category = data.get("category")
+    pdf_file_id = data.get("pdf_file_id")
+    caption = message.text
+
+    if not category or not pdf_file_id:
+        await message.answer("Сталася помилка, не знайдено категорію або файл. Спробуйте знову.", reply_markup=get_admin_kb())
+        await state.clear()
+        return
+
+    user_ids = await get_user_ids_by_category(category)
+
+    if not user_ids:
+        await message.answer(f"Не знайдено користувачів у категорії '{category}'. Розсилку скасовано.", reply_markup=get_admin_kb())
+        await state.clear()
+        return
+
+    await message.answer(f"⏳ Починаю розсилку для '{category}' ({len(user_ids)} користувачів)...")
+    
+    sent_count, failed_count = 0, 0
+    for user_id in user_ids:
+        try:
+            await bot.send_document(
+                chat_id=user_id,
+                document=pdf_file_id,
+                caption=caption,
+                parse_mode="HTML" # Можете додати, якщо хочете форматувати опис
+            )
+            sent_count += 1
+            await asyncio.sleep(0.1)  # Затримка для уникнення блокування
+        except TelegramForbiddenError:
+            failed_count += 1
+        except Exception as e:
+            print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
+            failed_count += 1
+
+    await message.answer(
+        f"Розсилку для '{category}' завершено.\n\n"
+        f"✅ Надіслано: {sent_count}\n"
+        f"❌ Не вдалося надіслати: {failed_count}",
+        reply_markup=get_admin_kb()
+    )
+    await state.clear()

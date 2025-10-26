@@ -5,7 +5,6 @@ import asyncio
 
 config = load_config()
 
-
 client = AsyncIOMotorClient(config.mongo_uri)
 db = client["bec-2025-bot"]  
 
@@ -151,6 +150,27 @@ async def get_all_id_teams():
     return teams_collection.find({"category": "Innovative Design"})
 
 #------------------------------------------------------------------------------------------------
+
+async def get_user_ids_by_category(category: str) -> list[int]:
+    # Додаємо умову "is_participant": True до запиту
+    cursor = teams_collection.find(
+        {"category": category, "is_participant": True}, 
+        {"members": 1}
+    )
+    
+    user_ids = []
+    async for team in cursor:
+        member_ids = team.get("members", [])
+        for member_id in member_ids:
+            # Для кожного учасника робимо окремий запит в колекцію users
+            user = await users_collection.find_one(
+                {"_id": member_id}, 
+                {"telegram_id": 1}
+            )
+            if user and user.get("telegram_id"):
+                user_ids.append(int(user["telegram_id"]))
+                
+    return user_ids
 
 async def get_team_by_name(team_name):
     return await teams_collection.find_one({"team_name": team_name})

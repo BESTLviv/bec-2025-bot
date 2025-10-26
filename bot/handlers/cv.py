@@ -109,19 +109,47 @@ async def handle_wrong_input_in_cv_state(message: types.Message):
     await message.answer("Будь ласка, надішліть саме файл (PDF, DOCX) або натисніть кнопку 'Назад🔙'.")
 
 
+# @router.message(F.text == "Перевірити своє CV")
+# async def cv_check(message: types.Message):
+#     user_id = message.from_user.id
+#     user_data = await users_collection.find_one({"telegram_id": user_id})
+
+#     if user_data and user_data.get("cv_file_path"):
+#         await message.answer("Знайшов твоє CV, зараз надішлю...")
+#         cv_file_id = user_data.get("cv_file_path")
+#         await message.answer_document(
+#             document=cv_file_id,
+#             caption="Ось твоє CV. Якщо хочеш надіслати нове, обери '📤 Надіслати готове CV'.",
+#             reply_markup=get_cv_kb()
+#         )
+#     else:
+#         await message.answer(
+#             "Упс, здається, ти ще не надіслав жодного CV.",
+#             reply_markup=get_cv_kb()
+#         )
+
 @router.message(F.text == "Перевірити своє CV")
 async def cv_check(message: types.Message):
     user_id = message.from_user.id
     user_data = await users_collection.find_one({"telegram_id": user_id})
 
     if user_data and user_data.get("cv_file_path"):
-        await message.answer("Знайшов твоє CV, зараз надішлю...")
         cv_file_id = user_data.get("cv_file_path")
-        await message.answer_document(
-            document=cv_file_id,
-            caption="Ось твоє CV. Якщо хочеш надіслати нове, обери '📤 Надіслати готове CV'.",
-            reply_markup=get_cv_kb()
-        )
+        
+        # Об'єднуємо текст та відправку документа в одне повідомлення
+        try:
+            await message.answer_document(
+                document=cv_file_id,
+                caption="Знайшов твоє CV! Ось воно.\n\nЯкщо хочеш надіслати нове, обери '📤 Надіслати готове CV'.",
+                reply_markup=get_cv_kb()
+            )
+        except Exception as e:
+            # Якщо виникне помилка при відправці, повідомимо користувача
+            print(f"Помилка при відправці CV для user_id {user_id}: {e}") # Це буде видно у вашій консолі
+            await message.answer(
+                "Упс, не вдалося надіслати твоє CV. Можливо, файл пошкоджено. Спробуй завантажити його знову.",
+                reply_markup=get_cv_kb()
+            )
     else:
         await message.answer(
             "Упс, здається, ти ще не надіслав жодного CV.",
