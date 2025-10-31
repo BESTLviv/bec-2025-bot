@@ -11,7 +11,7 @@ import asyncio
 
 # Переконайтесь, що всі імпорти правильні та відповідають вашому проєкту
 from bot.admin.admin_keyboard import get_admin_kb, get_statistic_kb
-from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_all_td_teams, get_all_id_teams, users_collection, get_user_ids_by_category
+from bot.utils.database import get_all_teams, get_all_user_ids, get_all_users_with_cv, get_all_td_teams, get_all_id_teams, users_collection, get_user_ids_by_category, get_all_participants_info
 
 load_dotenv()
 router = Router()
@@ -397,3 +397,111 @@ async def process_caption_and_send(message: types.Message, state: FSMContext, bo
         reply_markup=get_admin_kb()
     )
     await state.clear()
+
+@router.message(F.text == "Отримати інформацію учасників")
+async def get_participant_info(message: types.Message):
+    admin_id = int(os.getenv("ADMIN_ID"))
+    if message.from_user.id != admin_id:
+        return
+
+    participants = await get_all_participants_info()
+
+    if not participants:
+        await message.answer("Не знайдено жодного учасника в командах, позначених як 'is_participant: true'.")
+        return
+
+    # --- Початок блоку статистики ---
+
+    # 1. Ініціалізація словників для підрахунку
+    university_stats = {
+        "НУ “ЛП”": 0,
+        "ЛНУ ім. І. Франка": 0,
+        "УКУ": 0,
+        "Інший": 0
+    }
+    course_stats = {
+        "1 курс": 0,
+        "2 курс": 0,
+        "3 курс": 0,
+        "4 курс": 0,
+        "Магістратура": 0,
+        "Не навчаюсь": 0,
+        "Інше": 0
+    }
+    total_age = 0
+    valid_age_count = 0
+    
+    # 2. Цикл для збору даних та статистики
+    full_response = ""
+    for user in participants:
+        # Отримуємо дані для статистики
+        university = user.get("university")
+        course = user.get("course")
+        age_str = user.get("age")
+
+        # Підрахунок статистики
+        if university in university_stats:
+            university_stats[university] += 1
+        
+        if course in course_stats:
+            course_stats[course] += 1
+
+        if age_str and age_str.isdigit():
+            total_age += int(age_str)
+            valid_age_count += 1
+
+        # Формування відповіді з інформацією про користувача
+        name = html.escape(user.get("name", "Не вказано"))
+        username = html.escape(user.get("username", "Не вказано"))
+        user_university = html.escape(university or "Не вказано")
+        speciality = html.escape(user.get("speciality", "Не вказано"))
+        user_course = html.escape(course or "Не вказано")
+
+        user_block = (
+            f"👤 <b>Ім'я:</b> {name}\n"
+            f"✈️ <b>Username:</b> @{username}\n"
+            f"🏛 <b>Університет:</b> {user_university}\n"
+            f"🔬 <b>Спеціальність:</b> {speciality}\n"
+            f"🎓 <b>Курс:</b> {user_course}\n"
+            "-----------------------\n"
+        )
+        full_response += user_block
+
+    # 3. Розрахунок середнього віку
+    average_age = total_age / valid_age_count if valid_age_count > 0 else 0
+
+    # 4. Формування блоку зі статистикою
+    stats_summary = "<b>📊 Статистика Учасників:</b>\n\n"
+    stats_summary += "<b>По Університетах:</b>\n"
+    for uni, count in university_stats.items():
+        stats_summary += f"- {uni}: <b>{count}</b>\n"
+    
+    stats_summary += "\n<b>По Курсах:</b>\n"
+    for course_name, count in course_stats.items():
+        stats_summary += f"- {course_name}: <b>{count}</b>\n"
+        
+    stats_summary += f"\n<b>Середній вік:</b> <b>{average_age:.1f} років</b>\n"
+    stats_summary += "-----------------------\n\n"
+
+    # --- Кінець блоку статистики ---
+
+    # Загальний заголовок
+    response_header = f"<b>✅ Знайдено інформацію про {len(participants)} учасників.</b>\n\n"
+    
+    # Комбінуємо все разом
+    final_message = response_header + stats_summary + "<b>📝 Список учасників:</b>\n\n" + full_response
+
+    # Telegram має ліміт на довжину повідомлення (4096 символів).
+    # Якщо згенерований текст занадто великий, відправляємо його частинами.
+    if len(final_message) > 4096:
+        # Спочатку відправляємо заголовок та статистику
+        await message.answer(response_header + stats_summary, parse_mode="HTML")
+        await asyncio.sleep(0.5)
+        
+        # Потім частинами відправляємо список учасників
+        for i in range(0, len(full_response), 4096):
+            chunk = full_response[i:i + 4096]
+            await message.answer(chunk, parse_mode="HTML")
+            await asyncio.sleep(0.5) 
+    else:
+        await message.answer(final_message, parse_mode="HTML")

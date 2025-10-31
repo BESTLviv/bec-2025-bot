@@ -240,3 +240,32 @@ async def get_no_team_user_ids():
     )
     user_ids = [int(user['telegram_id']) async for user in cursor]
     return user_ids
+
+async def get_all_participants_info():
+    """
+    Знаходить всі команди, що є учасниками (is_participant: True),
+    і повертає список документів всіх учасників цих команд.
+    """
+    # 1. Знайти всі команди-учасники
+    participant_teams_cursor = teams_collection.find({"is_participant": True})
+    participant_teams = await participant_teams_cursor.to_list(length=None)
+
+    if not participant_teams:
+        return []
+
+    # 2. Зібрати всі ObjectId учасників в один список
+    all_member_ids = []
+    for team in participant_teams:
+        all_member_ids.extend(team.get("members", []))
+    
+    # Видалити дублікати, якщо один учасник якимось чином потрапив у кілька команд
+    unique_member_ids = list(set(all_member_ids))
+
+    if not unique_member_ids:
+        return []
+
+    # 3. Отримати повну інформацію про всіх учасників за їх ObjectId
+    participants_cursor = users_collection.find({"_id": {"$in": unique_member_ids}})
+    participants_list = await participants_cursor.to_list(length=None)
+    
+    return participants_list

@@ -19,6 +19,7 @@ def get_statistic_kb():
             [KeyboardButton(text="Отримати всі не повні команди")],
             [KeyboardButton(text="Отримати всі ID")],
             [KeyboardButton(text="Отримати всі TD")],
+            [KeyboardButton(text="Отримати інформацію учасників")],
         ],
         resize_keyboard=True
     )
