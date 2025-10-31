@@ -397,7 +397,6 @@ async def process_caption_and_send(message: types.Message, state: FSMContext, bo
         reply_markup=get_admin_kb()
     )
     await state.clear()
-
 @router.message(F.text == "Отримати інформацію учасників")
 async def get_participant_info(message: types.Message):
     admin_id = int(os.getenv("ADMIN_ID"))
@@ -410,34 +409,23 @@ async def get_participant_info(message: types.Message):
         await message.answer("Не знайдено жодного учасника в командах, позначених як 'is_participant: true'.")
         return
 
-    # --- Початок блоку статистики ---
-
-    # 1. Ініціалізація словників для підрахунку
+    # Ініціалізація словників та змінних для статистики
     university_stats = {
-        "НУ “ЛП”": 0,
-        "ЛНУ ім. І. Франка": 0,
-        "УКУ": 0,
-        "Інший": 0
+        "НУ “ЛП”": 0, "ЛНУ ім. І. Франка": 0, "УКУ": 0, "Інший": 0
     }
     course_stats = {
-        "1 курс": 0,
-        "2 курс": 0,
-        "3 курс": 0,
-        "4 курс": 0,
-        "Магістратура": 0,
-        "Не навчаюсь": 0,
-        "Інше": 0
+        "1 курс": 0, "2 курс": 0, "3 курс": 0, "4 курс": 0,
+        "Магістратура": 0, "Не навчаюсь": 0, "Інше": 0
     }
     total_age = 0
     valid_age_count = 0
     
-    # 2. Цикл для збору даних та статистики
     full_response = ""
     for user in participants:
         # Отримуємо дані для статистики
         university = user.get("university")
         course = user.get("course")
-        age_str = user.get("age")
+        age = user.get("age") # Використовуємо 'age'
 
         # Підрахунок статистики
         if university in university_stats:
@@ -446,9 +434,8 @@ async def get_participant_info(message: types.Message):
         if course in course_stats:
             course_stats[course] += 1
 
-        if age_str and age_str.isdigit():
-            total_age += int(age_str)
-            valid_age_count += 1
+        total_age += int(age)
+        valid_age_count += 1
 
         # Формування відповіді з інформацією про користувача
         name = html.escape(user.get("name", "Не вказано"))
@@ -467,38 +454,31 @@ async def get_participant_info(message: types.Message):
         )
         full_response += user_block
 
-    # 3. Розрахунок середнього віку
+    # Розрахунок середнього віку
     average_age = total_age / valid_age_count if valid_age_count > 0 else 0
 
-    # 4. Формування блоку зі статистикою
+    # Формування блоку зі статистикою
     stats_summary = "<b>📊 Статистика Учасників:</b>\n\n"
-    stats_summary += "<b>По Університетах:</b>\n"
+    stats_summary += "<b>🎓 По Університетах:</b>\n"
     for uni, count in university_stats.items():
         stats_summary += f"- {uni}: <b>{count}</b>\n"
     
-    stats_summary += "\n<b>По Курсах:</b>\n"
+    stats_summary += "\n<b>📈 По Курсах:</b>\n"
     for course_name, count in course_stats.items():
         stats_summary += f"- {course_name}: <b>{count}</b>\n"
         
-    stats_summary += f"\n<b>Середній вік:</b> <b>{average_age:.1f} років</b>\n"
+    stats_summary += f"\n<b>🎂 Середній вік:</b> <b>{average_age:.1f} років</b>\n"
     stats_summary += "-----------------------\n\n"
 
-    # --- Кінець блоку статистики ---
-
-    # Загальний заголовок
+    # Загальний заголовок та комбінація повідомлення
     response_header = f"<b>✅ Знайдено інформацію про {len(participants)} учасників.</b>\n\n"
-    
-    # Комбінуємо все разом
     final_message = response_header + stats_summary + "<b>📝 Список учасників:</b>\n\n" + full_response
 
-    # Telegram має ліміт на довжину повідомлення (4096 символів).
-    # Якщо згенерований текст занадто великий, відправляємо його частинами.
+    # Відправка повідомлення (з розбиттям, якщо воно занадто довге)
     if len(final_message) > 4096:
-        # Спочатку відправляємо заголовок та статистику
         await message.answer(response_header + stats_summary, parse_mode="HTML")
         await asyncio.sleep(0.5)
         
-        # Потім частинами відправляємо список учасників
         for i in range(0, len(full_response), 4096):
             chunk = full_response[i:i + 4096]
             await message.answer(chunk, parse_mode="HTML")
