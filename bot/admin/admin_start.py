@@ -18,8 +18,9 @@ router = Router()
 
 # --- FSM Стани ---
 class SpamStates(StatesGroup):
-  choosing_audience = State()
-  waiting_for_message = State()
+    choosing_audience = State()
+    waiting_for_content = State() # Перейменуємо для ясності
+    confirming_spam = State()
 
 class CategorySpamStates(StatesGroup):
     waiting_for_pdf = State()
@@ -55,45 +56,91 @@ async def start_spam(message: types.Message, state: FSMContext):
 # 2. ОБРОБКА ВИБОРУ АУДИТОРІЇ
 @router.callback_query(SpamStates.choosing_audience, F.data.startswith("spam_to_"))
 async def choose_audience(callback: types.CallbackQuery, state: FSMContext):
-    audience = callback.data.split("_")[-1]
-    await state.update_data(audience=audience)
-    await callback.message.edit_text("Тепер введіть текст розсилки або 'Назад' для відміни:")
-    await state.set_state(SpamStates.waiting_for_message)
-    await callback.answer()
-
-# 3. ФІНАЛЬНИЙ КРОК: ВІДПРАВКА РОЗСИЛКИ
-@router.message(SpamStates.waiting_for_message)
-async def send_spam(message: types.Message, state: FSMContext, bot: Bot):
-    admin_id = int(os.getenv("ADMIN_ID"))
-    if message.from_user.id != admin_id:
+    if callback.data == "spam_to_cancel":
+        await callback.message.edit_text("Розсилку скасовано.")
+        await state.clear()
+        await callback.answer()
         return
 
-    if message.text.lower() == "назад":
+    audience = callback.data.split("_")[-1]
+    await state.update_data(audience=audience)
+    await callback.message.edit_text(
+        "Тепер надішліть контент для розсилки:\n"
+        "- Просто текст\n"
+        "- Фото з підписом\n\n"
+        "Або введіть 'Назад' для відміни."
+    )
+    await state.set_state(SpamStates.waiting_for_content)
+    await callback.answer()
+
+# 3. ОТРИМАННЯ КОНТЕНТУ ТА ПІДТВЕРДЖЕННЯ
+@router.message(SpamStates.waiting_for_content, (F.text | F.photo))
+async def get_spam_content(message: types.Message, state: FSMContext):
+    if message.text and message.text.lower() == "назад":
         await message.answer("Розсилку скасовано.", reply_markup=get_admin_kb())
         await state.clear()
         return
 
+    if message.photo:
+        photo_id = message.photo[-1].file_id
+        text = message.caption or ""
+        await state.update_data(photo_id=photo_id, text=text)
+        await message.answer_photo(
+            photo=photo_id,
+            caption=f"Ось так виглядатиме розсилка. Підтверджуєте?\n\n---\n{text}",
+            parse_mode="HTML"
+        )
+    elif message.text:
+        text = message.text
+        await state.update_data(text=text)
+        await message.answer(
+            f"Ось так виглядатиме розсилка. Підтверджуєте?\n\n---\n{html.escape(text)}",
+            parse_mode="HTML"
+        )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Відправити", callback_data="spam_confirm")],
+        [InlineKeyboardButton(text="❌ Скасувати", callback_data="spam_cancel")]
+    ])
+    await message.answer("Підтвердіть відправку:", reply_markup=keyboard)
+    await state.set_state(SpamStates.confirming_spam)
+
+# Обробник скасування на етапі підтвердження
+@router.callback_query(SpamStates.confirming_spam, F.data == "spam_cancel")
+async def cancel_spam_confirmation(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text("Розсилку скасовано.")
+    await state.clear()
+    await callback.answer()
+
+# 4. ФІНАЛЬНИЙ КРОК: ВІДПРАВКА РОЗСИЛКИ ПІСЛЯ ПІДТВЕРДЖЕННЯ
+@router.callback_query(SpamStates.confirming_spam, F.data == "spam_confirm")
+async def send_spam(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.message.edit_text("⏳ Починаю розсилку...", reply_markup=None)
+
     user_data = await state.get_data()
     audience = user_data.get("audience")
-
+    
+    # Визначення аудиторії та отримання ID користувачів
     if audience == "all":
         user_ids = await get_all_user_ids()
         audience_name = "всім користувачам"
     elif audience == "no_team":
-        # Define the function to fetch user IDs without a team
+        # Функція для отримання користувачів без команди
         async def get_no_team_user_ids():
             users_cursor = await users_collection.find({"team_id": None}).to_list(length=None)
             return [user["telegram_id"] for user in users_cursor if "telegram_id" in user]
-
         user_ids = await get_no_team_user_ids()
         audience_name = "користувачам без команди"
     else:
-        await message.answer("Помилка: невідома аудиторія. Розсилку скасовано.", reply_markup=get_admin_kb())
+        await callback.message.answer("Помилка: невідома аудиторія.", reply_markup=get_admin_kb())
         await state.clear()
         return
 
-    raw_text = message.text or ""
+    # Отримання збереженого контенту
+    raw_text = user_data.get("text", "")
+    photo_id = user_data.get("photo_id")
 
+    # Форматування тексту (ваша логіка з посиланнями)
     url_regex = re.compile(r'https?://t\.me/[^\s)]+')
     matches = list(url_regex.finditer(raw_text))
     if matches:
@@ -104,35 +151,40 @@ async def send_spam(message: types.Message, state: FSMContext, bot: Bot):
         formatted_text = f'{before_text}<a href="{url}">Приєднатися</a>{after_text}'
     else:
         formatted_text = html.escape(raw_text)
-    
-    await message.answer(f"⏳ Починаю розсилку для '{audience_name}' ({len(user_ids)} користувачів)...")
+
+    await callback.message.answer(f"Розсилка для '{audience_name}' ({len(user_ids)} користувачів) запущена.")
 
     sent_count, failed_count = 0, 0
     for user_id in user_ids:
         try:
-            await bot.send_message(user_id, formatted_text, parse_mode="HTML", disable_web_page_preview=False)
+            if photo_id:
+                await bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo_id,
+                    caption=formatted_text,
+                    parse_mode="HTML"
+                )
+            else:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=formatted_text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=False
+                )
             sent_count += 1
-            # Додаємо невелику затримку для уникнення блокування
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)  # Затримка для уникнення блокування
         except TelegramForbiddenError:
             failed_count += 1
+            print(f"Користувач {user_id} заблокував бота.")
         except Exception as e:
-            print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
             failed_count += 1
+            print(f"Не вдалося надіслати повідомлення користувачу {user_id}: {e}")
 
-    await message.answer(
+    await callback.message.answer(
         f"Розсилку завершено.\n\n✅ Надіслано: {sent_count}\n❌ Не вдалося надіслати: {failed_count}",
         reply_markup=get_admin_kb()
     )
     await state.clear()
-
-# 4. ОБРОБНИК СКАСУВАННЯ
-@router.callback_query(SpamStates.choosing_audience, F.data == "spam_cancel")
-async def cancel_spam(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.edit_text("Розсилку скасовано.")
-    await callback.message.answer("Головне меню:", reply_markup=get_admin_kb())
-
 # --- ІНШІ ФУНКЦІЇ АДМІНА ---
 
 @router.message(F.text == "Отримати всі CV")
@@ -397,6 +449,8 @@ async def process_caption_and_send(message: types.Message, state: FSMContext, bo
         reply_markup=get_admin_kb()
     )
     await state.clear()
+
+
 @router.message(F.text == "Отримати інформацію учасників")
 async def get_participant_info(message: types.Message):
     admin_id = int(os.getenv("ADMIN_ID"))
@@ -409,7 +463,7 @@ async def get_participant_info(message: types.Message):
         await message.answer("Не знайдено жодного учасника в командах, позначених як 'is_participant: true'.")
         return
 
-    # Ініціалізація словників та змінних для статистики
+    # Ініціалізація словників для статистики
     university_stats = {
         "НУ “ЛП”": 0, "ЛНУ ім. І. Франка": 0, "УКУ": 0, "Інший": 0
     }
@@ -417,38 +471,58 @@ async def get_participant_info(message: types.Message):
         "1 курс": 0, "2 курс": 0, "3 курс": 0, "4 курс": 0,
         "Магістратура": 0, "Не навчаюсь": 0, "Інше": 0
     }
+    speciality_stats = {} # Новий словник для спеціальностей
     total_age = 0
     valid_age_count = 0
     
     full_response = ""
     for user in participants:
-        # Отримуємо дані для статистики
         university = user.get("university")
         course = user.get("course")
-        age = user.get("age") # Використовуємо 'age'
+        age = user.get("age")
+        speciality = user.get("speciality")
 
-        # Підрахунок статистики
-        if university in university_stats:
-            university_stats[university] += 1
+        # --- Підрахунок статистики ---
         
+        # Університети (надійний метод)
+        if university:
+            if "ЛП" in university or "Політехніка" in university:
+                university_stats["НУ “ЛП”"] += 1
+            elif "ЛНУ" in university or "Франка" in university:
+                university_stats["ЛНУ ім. І. Франка"] += 1
+            elif "УКУ" in university or "Католицький" in university:
+                university_stats["УКУ"] += 1
+            elif "Інший" in university:
+                university_stats["Інший"] += 1
+        
+        # Курси
         if course in course_stats:
             course_stats[course] += 1
 
-        total_age += int(age)
-        valid_age_count += 1
+        # Вік
+        if age and str(age).isdigit():
+            total_age += int(age)
+            valid_age_count += 1
+            
+        # НОВЕ: Спеціальності
+        if speciality:
+            # Приводимо до нижнього регістру та видаляємо пробіли
+            processed_spec = speciality.lower().strip()
+            # Додаємо до словника, збільшуючи лічильник
+            speciality_stats[processed_spec] = speciality_stats.get(processed_spec, 0) + 1
 
-        # Формування відповіді з інформацією про користувача
-        name = html.escape(user.get("name", "Не вказано"))
-        username = html.escape(user.get("username", "Не вказано"))
+        # --- Формування відповіді з інформацією про користувача ---
+        name = html.escape(user.get("name") or "Не вказано")
+        username = html.escape(user.get("username") or "Не вказано")
         user_university = html.escape(university or "Не вказано")
-        speciality = html.escape(user.get("speciality", "Не вказано"))
+        user_speciality = html.escape(speciality or "Не вказано")
         user_course = html.escape(course or "Не вказано")
 
         user_block = (
             f"👤 <b>Ім'я:</b> {name}\n"
             f"✈️ <b>Username:</b> @{username}\n"
             f"🏛 <b>Університет:</b> {user_university}\n"
-            f"🔬 <b>Спеціальність:</b> {speciality}\n"
+            f"🔬 <b>Спеціальність:</b> {user_speciality}\n"
             f"🎓 <b>Курс:</b> {user_course}\n"
             "-----------------------\n"
         )
@@ -457,7 +531,7 @@ async def get_participant_info(message: types.Message):
     # Розрахунок середнього віку
     average_age = total_age / valid_age_count if valid_age_count > 0 else 0
 
-    # Формування блоку зі статистикою
+    # --- Формування блоку зі статистикою ---
     stats_summary = "<b>📊 Статистика Учасників:</b>\n\n"
     stats_summary += "<b>🎓 По Університетах:</b>\n"
     for uni, count in university_stats.items():
@@ -467,6 +541,15 @@ async def get_participant_info(message: types.Message):
     for course_name, count in course_stats.items():
         stats_summary += f"- {course_name}: <b>{count}</b>\n"
         
+    # НОВЕ: Формування статистики спеціальностей
+    if speciality_stats:
+        # Сортуємо спеціальності за популярністю
+        sorted_specialities = sorted(speciality_stats.items(), key=lambda item: item[1], reverse=True)
+        stats_summary += "\n<b>🔬 По Спеціальностях:</b>\n"
+        for spec, count in sorted_specialities:
+            # Робимо першу літеру великою для краси
+            stats_summary += f"- {spec.capitalize()}: <b>{count}</b>\n"
+            
     stats_summary += f"\n<b>🎂 Середній вік:</b> <b>{average_age:.1f} років</b>\n"
     stats_summary += "-----------------------\n\n"
 
@@ -474,11 +557,10 @@ async def get_participant_info(message: types.Message):
     response_header = f"<b>✅ Знайдено інформацію про {len(participants)} учасників.</b>\n\n"
     final_message = response_header + stats_summary + "<b>📝 Список учасників:</b>\n\n" + full_response
 
-    # Відправка повідомлення (з розбиттям, якщо воно занадто довге)
+    # Відправка повідомлення
     if len(final_message) > 4096:
         await message.answer(response_header + stats_summary, parse_mode="HTML")
         await asyncio.sleep(0.5)
-        
         for i in range(0, len(full_response), 4096):
             chunk = full_response[i:i + 4096]
             await message.answer(chunk, parse_mode="HTML")
